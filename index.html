@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mandelbrot Fractal Explorer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mandelbrot Mobile</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,18 +11,18 @@
     <div id="ui">
         <div id="status">RENDERING...</div>
         <div class="title">Fractal Engine</div>
-        <div id="stats" class="stat-line">Iterations: 200</div>
+        <div id="stats" class="stat-line">Iter: 200</div>
         <div id="zoom" class="stat-line">Zoom: 1.0x</div>
         
         <div class="button-group">
-            <button class="palette-btn" onclick="updatePalette('ultra')">Ultra Blue</button>
-            <button class="palette-btn" onclick="updatePalette('fire')">Solar Fire</button>
+            <button class="palette-btn" onclick="updatePalette('ultra')">Blue</button>
+            <button class="palette-btn" onclick="updatePalette('fire')">Fire</button>
+            <button class="palette-btn reset-btn" onclick="resetView()">Reset</button>
         </div>
 
         <div class="controls-hint">
-            <b>LMB:</b> Zoom In<br>
-            <b>RMB:</b> Zoom Out<br>
-            <b>Resize:</b> Auto-fit
+            <b>Tap:</b> Zoom In<br>
+            <b>Long Press:</b> Zoom Out
         </div>
     </div>
 
