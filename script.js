@@ -5,11 +5,11 @@ const zoomEl = document.getElementById('zoom');
 const statusEl = document.getElementById('status');
 
 let width, height;
-let xMin = -2.2, xMax = 1.0;
-let yMin = -1.2, yMax = 1.2;
+let xMin, xMax, yMin, yMax;
 let maxIter = 200; 
 const paletteSize = 1024; 
 let currentPaletteData = null;
+let touchTimer = null;
 
 const PALETTES = {
     ultra: [
@@ -29,9 +29,14 @@ const PALETTES = {
     ]
 };
 
-function lerp(start, end, t) {
-    return start + (end - start) * t;
+function resetView() {
+    xMin = -2.2; xMax = 1.0;
+    yMin = -1.2; yMax = 1.2;
+    maxIter = 200;
+    handleResize();
 }
+
+function lerp(start, end, t) { return start + (end - start) * t; }
 
 function generatePalette(stops) {
     const data = new Uint8ClampedArray(paletteSize * 3);
@@ -40,15 +45,14 @@ function generatePalette(stops) {
         let left = stops[0], right = stops[stops.length - 1];
         for (let j = 0; j < stops.length - 1; j++) {
             if (pos >= stops[j].pos && pos <= stops[j+1].pos) {
-                left = stops[j];
-                right = stops[j+1];
+                left = stops[j]; right = stops[j+1];
                 break;
             }
         }
         const t = (pos - left.pos) / (right.pos - left.pos);
         data[i * 3 + 0] = lerp(left.r, right.r, t);
         data[i * 3 + 1] = lerp(left.g, right.g, t);
-        data[i * 3 + 2] = lerp(left.b, right.b, t); // Исправлено: было left.r
+        data[i * 3 + 2] = lerp(left.b, right.b, t);
     }
     return data;
 }
@@ -62,7 +66,7 @@ function render() {
     if (!currentPaletteData) return;
     statusEl.style.display = 'block';
 
-    setTimeout(() => {
+    requestAnimationFrame(() => {
         const imgData = ctx.createImageData(width, height);
         const data = imgData.data;
 
@@ -70,9 +74,7 @@ function render() {
             for (let y = 0; y < height; y++) {
                 const cx = xMin + (x / width) * (xMax - xMin);
                 const cy = yMin + (y / height) * (yMax - yMin);
-
-                let zx = 0, zy = 0, zx2 = 0, zy2 = 0;
-                let n = 0;
+                let zx = 0, zy = 0, zx2 = 0, zy2 = 0, n = 0;
 
                 while (n < maxIter && zx2 + zy2 <= 16) {
                     zy = 2 * zx * zy + cy;
@@ -88,9 +90,7 @@ function render() {
                 } else {
                     const smooth = n + 1 - Math.log2(Math.log2(zx2 + zy2)) / 2;
                     let colorIdx = Math.floor(smooth * 20) % paletteSize;
-                    if (colorIdx < 0) colorIdx = 0;
-
-                    data[pix]   = currentPaletteData[colorIdx * 3 + 0];
+                    data[pix] = currentPaletteData[colorIdx * 3 + 0];
                     data[pix+1] = currentPaletteData[colorIdx * 3 + 1];
                     data[pix+2] = currentPaletteData[colorIdx * 3 + 2];
                 }
@@ -99,38 +99,16 @@ function render() {
         }
         ctx.putImageData(imgData, 0, 0);
         statusEl.style.display = 'none';
-        
-        statsEl.innerText = `Iterations: ${Math.floor(maxIter)}`;
+        statsEl.innerText = `Iter: ${Math.floor(maxIter)}`;
         zoomEl.innerText = `Zoom: ${(3.2 / (xMax - xMin)).toFixed(1)}x`;
-    }, 0);
+    });
 }
 
-function handleResize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
-    
-    const ratio = width / height;
-    const xCenter = (xMax + xMin) / 2;
-    const xRange = xMax - xMin;
-    const yRange = xRange / ratio;
-    const yCenter = (yMax + yMin) / 2;
+function zoom(clientX, clientY, isOut) {
+    const centerX = xMin + (clientX / width) * (xMax - xMin);
+    const centerY = yMin + (clientY / height) * (yMax - yMin);
+    const zoomFactor = isOut ? 2.5 : 0.4;
 
-    yMin = yCenter - yRange / 2;
-    yMax = yCenter + yRange / 2;
-    
-    render();
-}
-
-canvas.addEventListener('mousedown', (e) => {
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-
-    const centerX = xMin + (mouseX / width) * (xMax - xMin);
-    const centerY = yMin + (mouseY / height) * (yMax - yMin);
-
-    const zoomFactor = e.button === 0 ? 0.4 : 2.5; 
     const dx = (xMax - xMin) * zoomFactor;
     const dy = (yMax - yMin) * zoomFactor;
 
@@ -139,15 +117,56 @@ canvas.addEventListener('mousedown', (e) => {
     yMin = centerY - dy / 2;
     yMax = centerY + dy / 2;
 
-    if (e.button === 0) maxIter += 50; 
-    else maxIter = Math.max(200, maxIter - 50);
+    if (!isOut) maxIter += 40;
+    else maxIter = Math.max(200, maxIter - 40);
 
     render();
+}
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const x = t.clientX;
+    const y = t.clientY;
+
+    touchTimer = setTimeout(() => {
+        zoom(x, y, true); // Zoom Out
+        touchTimer = null;
+    }, 500);
 });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (touchTimer) {
+        clearTimeout(touchTimer);
+        const t = e.changedTouches[0];
+        zoom(t.clientX, t.clientY, false); // Zoom In
+    }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0 || e.button === 2) {
+        zoom(e.clientX, e.clientY, e.button === 2);
+    }
+});
+
+function handleResize() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+    const ratio = width / height;
+    const xRange = xMax - xMin;
+    const yCenter = (yMax + yMin) / 2;
+    const newYRange = xRange / ratio;
+    yMin = yCenter - newYRange / 2;
+    yMax = yCenter + newYRange / 2;
+    render();
+}
 
 window.oncontextmenu = (e) => e.preventDefault();
 window.onresize = handleResize;
 
-// Инициализация
+xMin = -2.2; xMax = 1.0; yMin = -1.2; yMax = 1.2;
 currentPaletteData = generatePalette(PALETTES.ultra);
 handleResize();
